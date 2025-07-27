@@ -1,7 +1,5 @@
-import { MdOutlineLocalMall } from "react-icons/md";
-import { CiCoffeeCup } from "react-icons/ci";
-import { FaEthereum } from "react-icons/fa";
-import { AiOutlineShoppingCart } from "react-icons/ai";
+import { MdRocketLaunch, MdBuild, MdGroups, MdTrendingUp, MdStar, MdToken } from "react-icons/md";
+import { BsCoin, BsLightningCharge } from "react-icons/bs";
 import { Label, Pie, PieChart } from "recharts";
 import { useMemo } from "react";
 import {
@@ -22,13 +20,13 @@ import {
 const chartData = [
   {
     segment: "Trust Score",
-    value: Number(localStorage.getItem("trust_score")) || 0,
+    value: Number(localStorage.getItem("trust_score")) || 7,
     fill: "#2d763f",
   },
   {
     segment: "Remaining",
     value: ((score) => 10 - score)(
-      Number(localStorage.getItem("trust_score")) || 0
+      Number(localStorage.getItem("trust_score")) || 7
     ),
     fill: "#e0e0e0",
   },
@@ -58,54 +56,60 @@ interface RewardCard {
 
 const rewardCards: RewardCard[] = [
   {
-    code: "FREE Coffee",
-    description: "Get a free Coffee at Starbucks",
+    code: "GUI1000",
+    description: "Earn 1000 $GUI INU tokens for completing your first hunt!",
+    isExpired: false,
+    icon: <MdToken className="w-5 h-5 text-white" />,
+  },
+  {
+    code: "BUILDER",
+    description: "Get exclusive access to Aptos builder community events",
+    isExpired: false,
+    icon: <MdBuild className="w-5 h-5 text-white" />,
+  },
+  {
+    code: "MEME100",
+    description: "100 $GUI INU tokens for creating viral memes about Aptos",
+    isExpired: false,
+    icon: <BsLightningCharge className="w-5 h-5 text-white" />,
+  },
+  {
+    code: "COMMUNITY",
+    description: "Join exclusive $GUI INU community channels and groups",
+    isExpired: false,
+    icon: <MdGroups className="w-5 h-5 text-white" />,
+  },
+  {
+    code: "STARTER",
+    description: "500 $GUI INU tokens for new Aptos ecosystem builders",
     isExpired: true,
-    expiryDate: "8 Aug",
-    icon: <CiCoffeeCup className="w-5 h-5 text-white" />,
+    expiryDate: "15 Dec",
+    icon: <MdRocketLaunch className="w-5 h-5 text-white" />,
   },
   {
-    code: "BINGE150",
-    description: "Get 10% OFF upto ₹150 on your next dining bill",
-    isExpired: false,
-    icon: <CiCoffeeCup className="w-5 h-5 text-white" />,
-  },
-  {
-    code: "WEB3START",
-    description: "Earn 0.01 ETH cashback on your first crypto transaction",
-    isExpired: false,
-    icon: <FaEthereum className="w-5 h-5 text-white" />,
-  },
-  {
-    code: "WEB3START",
-    description: "Earn 0.01 ETH cashback on your first crypto transaction",
+    code: "TRENDING",
+    description: "Earn rewards for trending $GUI INU content on social media",
     isExpired: true,
-    icon: <FaEthereum className="w-5 h-5 text-white" />,
+    expiryDate: "20 Dec",
+    icon: <MdTrendingUp className="w-5 h-5 text-white" />,
   },
   {
-    code: "NFTLOOT",
-    description: "Get a free NFT on purchases above ₹5000",
+    code: "VIP",
+    description: "VIP access to $GUI INU ecosystem events and airdrops",
     isExpired: false,
-    icon: <FaEthereum className="w-5 h-5 text-white" />,
+    icon: <MdStar className="w-5 h-5 text-white" />,
   },
   {
-    code: "SHOP200",
-    description: "Get ₹200 OFF on your next shopping bill",
+    code: "HODL",
+    description: "Bonus rewards for long-term $GUI INU token holders",
     isExpired: false,
-    icon: <AiOutlineShoppingCart className="w-5 h-5 text-white" />,
-  },
-  {
-    code: "CART100",
-    description: "Flat ₹100 OFF on your cart value above ₹1000",
-    isExpired: true,
-    expiryDate: "3 Dec",
-    icon: <MdOutlineLocalMall className="w-5 h-5 text-white" />,
+    icon: <BsCoin className="w-5 h-5 text-white" />,
   },
 ];
 
 export function Rewards() {
   const trustScore = useMemo(() => {
-    return Number(localStorage.getItem("trust_score")) || 0;
+    return Number(localStorage.getItem("trust_score")) || 7;
   }, []);
 
   return (
@@ -177,7 +181,7 @@ export function Rewards() {
             </CardFooter>
           </Card>
         </div>
-        <h2 className="text-3xl font-bold my-8 text-green">Your Rewards</h2>
+        <h2 className="text-3xl font-bold my-8 text-green">$GUI INU Rewards</h2>
         <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
           {rewardCards.map((card, index) => (
             <div
@@ -205,7 +209,7 @@ export function Rewards() {
             >
               <div
                 className={`w-10 h-10 rounded-full flex items-center justify-center ${
-                  card.isExpired ? "bg-gray-700" : "bg-green-600"
+                  card.isExpired ? "bg-gray-500/50" : "bg-gray-700"
                 }`}
               >
                 {card.icon}
@@ -213,14 +217,14 @@ export function Rewards() {
               <div className="space-y-0.5">
                 <h3
                   className={`text-lg font-bold ${
-                    card.isExpired ? "text-gray-500" : "text-green-600"
+                    card.isExpired ? "text-gray-500" : "text-gray-600"
                   }`}
                 >
                   {card.code}
                 </h3>
                 <p
                   className={`text-xs ${
-                    card.isExpired ? "text-gray-400" : "text-gray-600"
+                    card.isExpired ? "text-gray-500" : "text-gray-600"
                   }`}
                 >
                   {card.description}
