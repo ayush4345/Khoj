@@ -1,5 +1,5 @@
-import { FaEthereum } from "react-icons/fa";
 import { SiPolkadot, SiCoinbase } from "react-icons/si";
+import { RiTreasureMapFill } from "react-icons/ri";
 import { Link } from "react-router-dom";
 import WalletWrapper from "@/helpers/WalletWrapper";
 import { SUPPORTED_CHAINS } from "../lib/utils";
@@ -58,7 +58,7 @@ export function Navbar() {
           {/* Logo/Brand */}
           <div className="flex-shrink-0">
             <Link to="/" className="text-xl font-bold flex items-center gap-2">
-              <FaEthereum className="text-green text-2xl" />
+              <RiTreasureMapFill className="text-green text-2xl" />
               Khoj
             </Link>
           </div>

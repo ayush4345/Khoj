@@ -1,297 +1,161 @@
 import { TbLadder, TbChessKnight } from "react-icons/tb";
-import { FaChess, FaDice } from "react-icons/fa";
-import { BsFillCalendarDateFill } from "react-icons/bs";
+import {
+  FaChess,
+  FaDice,
+  FaCalendarAlt,
+  FaUsers,
+  FaCoins,
+} from "react-icons/fa";
 import { useNavigate } from "react-router-dom";
-import { useActiveAccount, useReadContract } from "thirdweb/react";
-import { getContract, readContract } from "thirdweb";
-import { huntABI } from "../assets/hunt_abi.ts";
 import { toast } from "sonner";
-
-import { useClaudeRiddles } from "@/hooks/useClaudeRiddles";
-import { TransactionButton } from "./TransactionButton";
 import { Button } from "./ui/button.tsx";
-import { useState, useEffect, useMemo } from "react";
-import { SUPPORTED_CHAINS, CONTRACT_ADDRESSES } from "../lib/utils";
-import { client } from "../lib/client";
-import { paseoAssetHub } from "../lib/chains";
+import { useState, useMemo } from "react";
+
+// Hardcoded hunt data for frontend-only prototype
+const MOCK_HUNTS = [
+  {
+    id: 1,
+    name: "Aptos Ecosystem Explorer",
+    description:
+      "Discover the vibrant Aptos ecosystem through interactive challenges and earn $GNU INU tokens!",
+    startTime: "20241201",
+    duration: "7 days",
+    participantCount: 156,
+    clues_blobId: "aptos-ecosystem-clues",
+    answers_blobId: "aptos-ecosystem-answers",
+    reward: "1000 $GNU INU",
+    difficulty: "Beginner",
+    category: "Ecosystem",
+  },
+  {
+    id: 2,
+    name: "DeFi Treasure Hunt",
+    description:
+      "Navigate through Aptos DeFi protocols and earn rewards in $GNU INU tokens",
+    startTime: "20241205",
+    duration: "5 days",
+    participantCount: 89,
+    clues_blobId: "defi-clues",
+    answers_blobId: "defi-answers",
+    reward: "750 $GNU INU",
+    difficulty: "Intermediate",
+    category: "DeFi",
+  },
+  {
+    id: 3,
+    name: "NFT Art Gallery Quest",
+    description:
+      "Explore digital art galleries and collect exclusive $GNU INU community NFTs",
+    startTime: "20241210",
+    duration: "3 days",
+    participantCount: 234,
+    clues_blobId: "nft-clues",
+    answers_blobId: "nft-answers",
+    reward: "500 $GNU INU + NFT",
+    difficulty: "Beginner",
+    category: "NFT",
+  },
+  {
+    id: 4,
+    name: "Aptos Developer Challenge",
+    description:
+      "Test your coding skills with Aptos Move smart contracts and earn developer rewards",
+    startTime: "20241215",
+    duration: "10 days",
+    participantCount: 67,
+    clues_blobId: "developer-clues",
+    answers_blobId: "developer-answers",
+    reward: "1500 $GNU INU",
+    difficulty: "Advanced",
+    category: "Development",
+  },
+  {
+    id: 5,
+    name: "Community Meme Hunt",
+    description:
+      "Create and share viral memes about Aptos and $GNU INU to earn community rewards",
+    startTime: "20241220",
+    duration: "4 days",
+    participantCount: 445,
+    clues_blobId: "meme-clues",
+    answers_blobId: "meme-answers",
+    reward: "300 $GNU INU",
+    difficulty: "Beginner",
+    category: "Community",
+  },
+];
 
 interface Hunt {
+  id: number;
   name: string;
   description: string;
-  startTime: bigint;
-  duration: bigint;
-  participantCount: bigint;
+  startTime: string;
+  duration: string;
+  participantCount: number;
   clues_blobId: string;
   answers_blobId: string;
-}
-
-const BACKEND_URL = import.meta.env.VITE_PUBLIC_BACKEND_URL;
-
-// Type guard to ensure address is a valid hex string
-function isValidHexAddress(address: string): address is `0x${string}` {
-  return /^0x[0-9a-fA-F]{40}$/.test(address);
+  reward: string;
+  difficulty: string;
+  category: string;
 }
 
 export function Hunts() {
-  const account = useActiveAccount();
-  const address = account?.address;
   const navigate = useNavigate();
-  const [currentHuntId, setCurrentHuntId] = useState<number>(0);
+
   // Track registration status per hunt (true if registered, false if not)
   const [huntRegistrations, setHuntRegistrations] = useState<
     Record<number, boolean>
   >({});
-  const [isCheckingRegistrations, setIsCheckingRegistrations] = useState(false);
   // Track which hunt is currently starting
   const [startingHunts, setStartingHunts] = useState<Record<number, boolean>>(
     {}
   );
-  const { fetchRiddles, isLoading } = useClaudeRiddles(currentHuntId);
 
   // Feature flag for hunt filtering - controlled by environment variable
-  const enableHuntFiltering = import.meta.env.VITE_ENABLE_HUNT_FILTERING === 'true';
-
-  // Add this to get current network from localStorage
-  const currentNetwork = localStorage.getItem("current_network") || "assetHub";
-  const rawContractAddress =
-    CONTRACT_ADDRESSES[currentNetwork as keyof typeof CONTRACT_ADDRESSES] ??
-    "0x0000000000000000000000000000000000000000";
-
-  // Memoize the contract instance to prevent recreation on every render
-  const contract = useMemo(() => {
-    if (!isValidHexAddress(rawContractAddress)) {
-      return null;
-    }
-    const contractAddress = rawContractAddress as `0x${string}`;
-    if (contractAddress === "0x0000000000000000000000000000000000000000") {
-      return null;
-    }
-    return getContract({
-      client,
-      chain: paseoAssetHub,
-      address: contractAddress,
-      abi: huntABI,
-    });
-  }, [rawContractAddress]);
-
-  // Call hooks at the top level
-  const { data: hunts = [], error: huntsError } = useReadContract({
-    contract: contract!,
-    method: "getAllHunts",
-    params: [],
-  });
-
-  const { data: nftContractAddress } = useReadContract({
-    contract: contract!,
-    method: "nftContract",
-    params: [],
-  });
+  const enableHuntFiltering =
+    import.meta.env.VITE_ENABLE_HUNT_FILTERING === "true";
 
   // Process hunts based on feature flag
   const processedHunts = useMemo(() => {
     if (!enableHuntFiltering) {
-      return hunts;
+      return MOCK_HUNTS;
     }
 
     // Filter out hunts with 'Test' or 'hello' in name or description (case insensitive)
     // Also filter out hunts with descriptions smaller than 5 characters
-    const filteredHunts = hunts.filter((hunt: Hunt) => {
-      const nameMatch = hunt.name.toLowerCase().includes('test') || hunt.name.toLowerCase().includes('hello');
-      const descriptionMatch = hunt.description.toLowerCase().includes('test') || hunt.description.toLowerCase().includes('hello');
+    const filteredHunts = MOCK_HUNTS.filter((hunt: Hunt) => {
+      const nameMatch =
+        hunt.name.toLowerCase().includes("test") ||
+        hunt.name.toLowerCase().includes("hello");
+      const descriptionMatch =
+        hunt.description.toLowerCase().includes("test") ||
+        hunt.description.toLowerCase().includes("hello");
       const descriptionTooShort = hunt.description.length < 5;
-      
+
       return !nameMatch && !descriptionMatch && !descriptionTooShort;
     });
 
     // Return only the last 5 hunts
     return filteredHunts.slice(-5);
-  }, [hunts, enableHuntFiltering]);
+  }, [enableHuntFiltering]);
 
-  // Check registration status for all hunts when component loads or address changes
-  useEffect(() => {
-    const checkRegistrationStatus = async () => {
-      if (!address || !processedHunts.length || isCheckingRegistrations || !contract)
-        return;
+  function formatDate(date: string) {
+    const year = date.substring(0, 4);
+    const month = date.substring(4, 6);
+    const day = date.substring(6, 8);
 
-      setIsCheckingRegistrations(true);
-      const registrationStatus: Record<number, boolean> = {};
-
-      try {
-        // Check registration status for each hunt
-        // Note: We need to map back to original hunt indices for contract calls
-        const promises = processedHunts.map(async (_, processedIndex) => {
-          try {
-            // Find the original index of this hunt in the full hunts array
-            const originalIndex = hunts.findIndex(hunt => hunt === processedHunts[processedIndex]);
-            
-            const tokenId = await readContract({
-              contract,
-              method: "getTokenId",
-              params: [BigInt(originalIndex), address],
-            });
-
-            // If tokenId > 0, user is registered for this hunt
-            // Store using the processedIndex for UI consistency
-            return { index: processedIndex, isRegistered: tokenId > 0n };
-          } catch (error) {
-            console.error(`Error checking registration for hunt ${processedIndex}:`, error);
-            return { index: processedIndex, isRegistered: false };
-          }
-        });
-
-        const results = await Promise.all(promises);
-        results.forEach(({ index, isRegistered }) => {
-          registrationStatus[index] = isRegistered;
-        });
-
-        setHuntRegistrations(registrationStatus);
-      } catch (error) {
-        console.error("Error checking registration status:", error);
-      } finally {
-        setIsCheckingRegistrations(false);
-      }
-    };
-
-    checkRegistrationStatus();
-  }, [address, processedHunts.length, contract, hunts]); // Added hunts dependency for mapping
-
-  // Early returns after all hooks
-  if (!isValidHexAddress(rawContractAddress)) {
-    toast.error("Invalid contract address format");
-    return null;
+    return new Date(
+      Number(year),
+      Number(month) - 1,
+      Number(day)
+    ).toLocaleDateString("en-GB", {
+      day: "numeric",
+      month: "short",
+      year: "numeric",
+    });
   }
 
-  const contractAddress = rawContractAddress as `0x${string}`;
-
-  if (contractAddress === "0x0000000000000000000000000000000000000000") {
-    toast.error("Contract address not found for the selected network");
-    return null;
-  }
-
-  if (!contract) {
-    return null;
-  }
-
-  //get the token getTokenId
-  const chainId =
-    SUPPORTED_CHAINS[currentNetwork as keyof typeof SUPPORTED_CHAINS].id;
-
-  console.log("Hunts: chainId", chainId);
-  console.log("Hunts: contractAddress", contractAddress);
-  console.log("NFT Contract Address:", nftContractAddress);
-
-  const handleHuntStart = async (
-    processedIndex: number,
-    originalIndex: number,
-    clues_blobId: string,
-    answers_blobId: string
-  ) => {
-    if (!address) {
-      toast.error("Please connect your wallet first");
-      return;
-    }
-
-    // Set this hunt as starting
-    setStartingHunts((prev) => ({ ...prev, [processedIndex]: true }));
-    setCurrentHuntId(originalIndex);
-
-    try {
-      const tokenId = await readContract({
-        contract,
-        method: "getTokenId",
-        params: [BigInt(originalIndex), address],
-      });
-
-      if (tokenId === 0n) {
-        toast.error(
-          "You are not eligible for this hunt. Please register or check the requirements."
-        );
-        return;
-      }
-
-      console.log("Hunt ID:", originalIndex, clues_blobId, answers_blobId);
-      const headersList = {
-        Accept: "*/*",
-        "Content-Type": "application/json",
-      };
-
-      const bodyContent = JSON.stringify({
-        userAddress: "0x7F23F30796F54a44a7A95d8f8c8Be1dB017C3397",
-        clues_blobId: clues_blobId,
-        answers_blobId: answers_blobId,
-      });
-
-      const response = await fetch(`${BACKEND_URL}/decrypt-clues`, {
-        method: "POST",
-        body: bodyContent,
-        headers: headersList,
-      });
-
-      const data = await response.text();
-      const clues = JSON.parse(data);
-
-      console.log("Clues: ", clues);
-
-      await fetchRiddles(clues, originalIndex.toString());
-      navigate(`/hunt/${originalIndex}/clue/1`);
-    } catch (error) {
-      console.error("Error reading contract:", error);
-      toast.error("Failed to check hunt eligibility");
-    } finally {
-      // Remove this hunt from starting state
-      setStartingHunts((prev) => ({ ...prev, [processedIndex]: false }));
-    }
-  };
-
-  const handleRegisterSuccess = (data: any, huntIndex: number) => {
-    console.log("Register success: ", data);
-    toast.success("Successfully registered for hunt!");
-
-    // Update registration status for this specific hunt
-    setHuntRegistrations((prev) => ({
-      ...prev,
-      [huntIndex]: true,
-    }));
-  };
-
-  // Add more detailed logging
-  console.log("Contract Debug:", {
-    contractAddress,
-    chainId,
-    currentNetwork,
-    huntsError,
-    hunts,
-  });
-
-  if (huntsError) {
-    console.error("Error fetching hunts:", huntsError);
-    toast.error("Failed to fetch hunts. Please check your connection.");
-  }
-
-  console.log("Debug Info:", {
-    currentNetwork,
-    contractAddress,
-    chainId,
-    address,
-    hunts,
-    huntsError,
-  });
-
-  console.log("Hunts: hunts", hunts);
-
-  function formatDate(date: number) {
-    const dateObj = new Date(date);
-    const year = dateObj.getFullYear();
-    const month = String(dateObj.getMonth() + 1).padStart(2, "0");
-    const day = String(dateObj.getDate()).padStart(2, "0");
-
-    return Number(`${year}${month}${day}`);
-  }
-
-  const today = formatDate(Date.now());
-
-  console.log("today", today);
-  console.log("reg", huntRegistrations);
+  const today = new Date().toISOString().slice(0, 10).replace(/-/g, "");
 
   // Array of background colors and icons to rotate through
   const bgColors = ["bg-green", "bg-orange", "bg-yellow", "bg-pink", "bg-red"];
@@ -304,7 +168,7 @@ export function Hunts() {
 
   // Function to get button text and action based on hunt state
   const getButtonConfig = (hunt: Hunt, index: number) => {
-    const huntStartTime = new Date(Number(hunt.startTime)).getTime();
+    const huntStartTime = hunt.startTime;
     const isHuntStarted = huntStartTime <= today;
     const isRegistered = huntRegistrations[index];
     const isStarting = startingHunts[index];
@@ -339,22 +203,67 @@ export function Hunts() {
     };
   };
 
+  const handleHuntStart = async (
+    index: number,
+    huntId: number,
+    clues_blobId: string,
+    answers_blobId: string
+  ) => {
+    // Set this hunt as starting
+    setStartingHunts((prev) => ({ ...prev, [index]: true }));
+
+    try {
+      // Simulate loading time for smooth UX
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+
+      console.log("Starting hunt:", huntId, clues_blobId, answers_blobId);
+
+      // Navigate to the hunt page
+      navigate(`/hunt/${huntId}/clue/1`);
+    } catch (error) {
+      console.error("Error starting hunt:", error);
+      toast.error("Failed to start hunt");
+    } finally {
+      // Remove this hunt from starting state
+      setStartingHunts((prev) => ({ ...prev, [index]: false }));
+    }
+  };
+
+  const handleRegisterSuccess = (huntIndex: number) => {
+    console.log("Register success for hunt:", huntIndex);
+    toast.success("Successfully registered for hunt!");
+
+    // Update registration status for this specific hunt
+    setHuntRegistrations((prev) => ({
+      ...prev,
+      [huntIndex]: true,
+    }));
+  };
+
+  const handleRegister = (huntIndex: number) => {
+    // Simulate registration process
+    toast.loading("Registering for hunt...");
+
+    setTimeout(() => {
+      handleRegisterSuccess(huntIndex);
+    }, 1500);
+  };
+
   return (
     <div className="pt-16 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto mb-[90px]">
       <h1 className="text-3xl font-bold my-8 text-green drop-shadow-xl">
         Hunts
       </h1>
+
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
         {processedHunts.map((hunt: Hunt, index: number) => {
           const buttonConfig = getButtonConfig(hunt, index);
-          // Find the original index for contract interactions
-          const originalIndex = hunts.findIndex(h => h === hunt);
 
           return (
             <div
-              key={index}
+              key={hunt.id}
               className="flex 
-         bg-white rounded-lg h-48
+         bg-white rounded-lg h-64
         border-black 
           relative  
           before:absolute 
@@ -365,7 +274,8 @@ export function Hunts() {
           before:-translate-x-2
           before:translate-y-2
           before:-z-10
-          border-[3px]"
+          border-[3px]
+          hover:shadow-xl transition-all duration-300"
             >
               <div
                 className={`w-1/4 flex items-center justify-center ${
@@ -377,78 +287,71 @@ export function Hunts() {
 
               <div className="w-3/4 p-5 flex flex-col justify-between">
                 <div>
-                  <h2 className="text-xl font-semibold text-gray-800 mb-2 h-[32px] overflow-hidden">
-                    {hunt.name}
-                  </h2>
-                  <p className="text-[0.85rem] text-gray-600 line-clamp-2">
+                  <div className="flex items-center gap-2 mb-2">
+                    <h2 className="text-xl font-semibold text-gray-800 h-[32px] overflow-hidden">
+                      {hunt.name}
+                    </h2>
+                    <span
+                      className={`text-xs px-2 py-1 rounded-full ${
+                        hunt.difficulty === "Beginner"
+                          ? "bg-green/20 text-green"
+                          : hunt.difficulty === "Intermediate"
+                          ? "bg-yellow/20 text-yellow"
+                          : "bg-red/20 text-red"
+                      }`}
+                    >
+                      {hunt.difficulty}
+                    </span>
+                  </div>
+                  <p className="text-[0.85rem] text-gray-600 line-clamp-2 mb-4">
                     {hunt.description}
                   </p>
                 </div>
 
-                <div className="mt-auto">
-                  <div className="flex items-center gap-1 text-gray-500 text-sm mb-3">
-                    <BsFillCalendarDateFill className="w-4 h-4" />
-                    <span>
-                      {new Date(
-                        Number(hunt.startTime.toString().substring(0, 4)),
-                        Number(hunt.startTime.toString().substring(4, 6)) - 1,
-                        Number(hunt.startTime.toString().substring(6, 8))
-                      ).toLocaleDateString("en-GB", {
-                        day: "numeric",
-                        month: "short",
-                        year: "numeric",
-                      })}
+                <div className="mt-auto space-y-1.5 mb-3.5">
+                  <div className="flex items-center gap-2 text-gray-500 text-sm">
+                    <FaCalendarAlt className="w-3.5 h-3.5" />
+                    <span>{formatDate(hunt.startTime)}</span>
+                  </div>
+                  <div className="flex items-center gap-2 text-gray-500 text-sm">
+                    <FaCoins className="w-3.5 h-3.5 text-green" />
+                    <span className="text-green font-medium">
+                      {hunt.reward}
                     </span>
                   </div>
-
-                  {/* Single button that changes based on state */}
-                  {buttonConfig.action === "register" ? (
-                    <TransactionButton
-                      contractAddress={contractAddress}
-                      abi={huntABI}
-                      functionName="registerForHunt"
-                      args={[
-                        originalIndex,
-                        address || "0x0000000000000000000000000000000000000000",
-                        "https://ethunt.vercel.app/metadata.json",
-                      ]}
-                      text={buttonConfig.text}
-                      className={`w-full py-1.5 text-sm font-medium rounded-md ${buttonConfig.className} transition-colors duration-300`}
-                      disabled={
-                        !address ||
-                        isLoading ||
-                        isCheckingRegistrations ||
-                        buttonConfig.disabled
-                      }
-                      onError={(error) => console.log(error)}
-                      onSuccess={(data) => handleRegisterSuccess(data, index)}
-                    />
-                  ) : (
-                    <Button
-                      onClick={() => {
-                        if (buttonConfig.action === "start") {
-                          handleHuntStart(
-                            index,
-                            originalIndex,
-                            hunt.clues_blobId,
-                            hunt.answers_blobId
-                          );
-                        }
-                      }}
-                      className={`w-full py-1.5 text-sm font-medium rounded-md ${buttonConfig.className} transition-colors duration-300`}
-                      disabled={
-                        !address ||
-                        isLoading ||
-                        isCheckingRegistrations ||
-                        buttonConfig.disabled
-                      }
-                    >
-                      {isCheckingRegistrations
-                        ? "Checking..."
-                        : buttonConfig.text}
-                    </Button>
-                  )}
+                  <div className="flex items-center gap-2 text-gray-500 text-sm">
+                    <FaUsers className="w-3.5 h-3.5" />
+                    <span>{hunt.participantCount} participants</span>
+                  </div>
                 </div>
+
+                {/* Single button that changes based on state */}
+                {buttonConfig.action === "register" ? (
+                  <Button
+                    onClick={() => handleRegister(index)}
+                    className={`w-full py-1.5 text-sm font-medium rounded-md ${buttonConfig.className} transition-colors duration-300`}
+                    disabled={buttonConfig.disabled}
+                  >
+                    {buttonConfig.text}
+                  </Button>
+                ) : (
+                  <Button
+                    onClick={() => {
+                      if (buttonConfig.action === "start") {
+                        handleHuntStart(
+                          index,
+                          hunt.id,
+                          hunt.clues_blobId,
+                          hunt.answers_blobId
+                        );
+                      }
+                    }}
+                    className={`w-full py-1.5 text-sm font-medium rounded-md ${buttonConfig.className} transition-colors duration-300`}
+                    disabled={buttonConfig.disabled}
+                  >
+                    {buttonConfig.text}
+                  </Button>
+                )}
               </div>
             </div>
           );
