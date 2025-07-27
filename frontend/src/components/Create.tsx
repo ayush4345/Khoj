@@ -1,20 +1,10 @@
 import { useState } from "react";
-import { useActiveAccount } from "thirdweb/react";
-import { huntABI } from "../assets/hunt_abi";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
-import { TransactionButton } from "./TransactionButton";
-import { CONTRACT_ADDRESSES, SUPPORTED_CHAINS } from "../lib/utils";
-
-const BACKEND_URL = import.meta.env.VITE_PUBLIC_BACKEND_URL;
-
-// Type guard to ensure address is a valid hex string
-function isValidHexAddress(address: string): address is `0x${string}` {
-  return /^0x[0-9a-fA-F]{40}$/.test(address);
-}
+import { useNavigate } from "react-router-dom";
 
 interface Clue {
   id: number;
@@ -24,31 +14,32 @@ interface Clue {
   answer: string;
 }
 
-interface ClueData {
+interface Hunt {
   id: number;
+  name: string;
   description: string;
-}
-
-interface AnswerData {
-  id: number;
-  answer: string;
-  lat: number;
-  long: number;
-}
-
-interface IPFSResponse {
+  startTime: string;
+  duration: string;
+  participantCount: number;
   clues_blobId: string;
   answers_blobId: string;
+  reward: string;
+  difficulty: string;
+  category: string;
+  clues: Clue[];
 }
 
 export function Create() {
-  const account = useActiveAccount();
-  const address = account?.address;
+  const navigate = useNavigate();
 
   const [huntName, setHuntName] = useState("");
   const [description, setDescription] = useState("");
   const [startDate, setStartDate] = useState("");
   const [duration, setDuration] = useState("");
+  const [participantCount, setParticipantCount] = useState("0");
+  const [reward, setReward] = useState("");
+  const [difficulty, setDifficulty] = useState("Beginner");
+  const [category, setCategory] = useState("General");
   const [clues, setClues] = useState<Clue[]>([]);
   const [currentClue, setCurrentClue] = useState<Partial<Clue>>({
     id: 1,
@@ -57,28 +48,6 @@ export function Create() {
     lat: 0,
     long: 0,
   });
-  const [isUploading, setIsUploading] = useState(false);
-  const [uploadedCIDs, setUploadedCIDs] = useState<IPFSResponse | null>(null);
-  const [cluesCID, setCluesCID] = useState("");
-  const [answersCID, setAnswersCID] = useState("");
-  const [healthCheckStatus, setHealthCheckStatus] = useState<string | null>(null);
-
-  // Add this to get current network from localStorage
-  const currentNetwork = localStorage.getItem("current_network") || "assetHub";
-  console.log("Create: Current Network: ", currentNetwork);
-  const contractAddress =
-    CONTRACT_ADDRESSES[currentNetwork as keyof typeof CONTRACT_ADDRESSES] ??
-    "0x0000000000000000000000000000000000000000";
-
-  // Get chain ID for the current network
-  const chainId =
-    SUPPORTED_CHAINS[currentNetwork as keyof typeof SUPPORTED_CHAINS].id;
-  console.log("Create: Chain ID: ", chainId);
-
-  if (!isValidHexAddress(contractAddress)) {
-    toast.error("Invalid contract address format");
-    return null;
-  }
 
   const handleAddClue = () => {
     if (
@@ -102,120 +71,89 @@ export function Create() {
     }
   };
 
-  const getTransactionArgs = () => {
+  const handleCreateHunt = () => {
+    // Validate required fields
     if (
       !huntName ||
       !description ||
       !startDate ||
       !duration ||
-      !cluesCID ||
-      !answersCID
+      !reward ||
+      clues.length === 0
     ) {
-      return null;
-    }
-
-    // Convert date to YYYYMMDD format
-    const formattedDate = startDate.split("-").join("");
-    // Convert duration to seconds
-    const durationInSeconds = parseInt(duration) * 3600; // Convert hours to seconds
-
-    return [
-      huntName,
-      description,
-      BigInt(formattedDate),
-      cluesCID,
-      answersCID,
-      BigInt(durationInSeconds),
-    ];
-  };
-
-  const handleTransactionSuccess = () => {
-    toast.success("Hunt created successfully!");
-    resetForm();
-  };
-
-  const handleTransactionError = (error: any) => {
-    console.error("Error creating hunt:", error);
-    toast.error(error.message || "Failed to create hunt");
-  };
-
-  const testBackendHealth = async () => {
-    try {
-      const response = await fetch(`${BACKEND_URL}/health`);
-      if (response.ok) {
-        const data = await response.json();
-        console.log("Backend health check response:", BACKEND_URL, data);
-        setHealthCheckStatus("✅ Backend is healthy");
-        toast.success("Backend is working!");
-      } else {
-        setHealthCheckStatus(`❌ Backend error: ${response.status}`);
-        toast.error(`Backend error: ${response.status}`);
-      }
-    } catch (error) {
-      setHealthCheckStatus("❌ Backend unreachable");
-      toast.error("Backend is unreachable");
-    }
-  };
-
-  const uploadToIPFS = async () => {
-    if (clues.length === 0) {
-      toast.error("Please add at least one clue before uploading");
+      toast.error(
+        "Please fill in all required fields and add at least one clue"
+      );
       return;
     }
 
-    setIsUploading(true);
+    // Generate unique ID
+    const huntId = Date.now();
 
-    try {
-      // Prepare clues and answers data
-      const cluesData: ClueData[] = clues.map(({ id, description }) => ({
-        id,
-        description,
-      }));
+    // Convert date to YYYYMMDD format
+    const formattedDate = startDate.split("-").join("");
 
-      const answersData: AnswerData[] = clues.map(
-        ({ id, answer, lat, long }) => ({
-          id,
-          answer,
-          lat,
-          long,
-        })
-      );
+    // Convert duration to a string format (e.g., "7 hours", "5 hours")
+    const durationText = `${duration} ${
+      parseInt(duration) === 1 ? "hour" : "hours"
+    }`;
 
-      const response = await fetch(`${BACKEND_URL}/encrypt`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          clues: cluesData,
-          answers: answersData,
-          userAddress: address,
-        }),
-      });
+    // Create hunt object
+    const newHunt: Hunt = {
+      id: huntId,
+      name: huntName,
+      description: description,
+      startTime: formattedDate,
+      duration: durationText,
+      participantCount: parseInt(participantCount) || 0,
+      clues_blobId: `clues-${huntId}`,
+      answers_blobId: `answers-${huntId}`,
+      reward: reward,
+      difficulty: difficulty,
+      category: category,
+      clues: clues,
+    };
 
-      if (!response.ok) {
-        throw new Error("Failed to upload to IPFS");
-      }
+    // Get existing custom hunts from localStorage
+    const existingHunts = JSON.parse(
+      localStorage.getItem("custom_hunts") || "[]"
+    );
 
-      const data = await response.json();
-      setUploadedCIDs(data);
-      toast.success(
-        "Successfully uploaded to IPFS! Please copy the CIDs below to the CID input fields."
-      );
-    } catch (err) {
-      console.error("Error uploading to IPFS:", err);
-      toast.error("Failed to upload to IPFS");
-    } finally {
-      setIsUploading(false);
-    }
+    console.log("Creating new hunt:", newHunt);
+    console.log("Existing hunts:", existingHunts);
+
+    // Add new hunt
+    const updatedHunts = [...existingHunts, newHunt];
+
+    console.log("Updated hunts to save:", updatedHunts);
+
+    // Save to localStorage
+    localStorage.setItem("custom_hunts", JSON.stringify(updatedHunts));
+
+    // Store clues data separately for hunt gameplay
+    localStorage.setItem(`hunt_clues_${huntId}`, JSON.stringify(clues));
+
+    // Dispatch custom event to notify other components
+    window.dispatchEvent(new CustomEvent("huntsUpdated"));
+
+    toast.success("Hunt created successfully!");
+
+    // Reset form
+    resetForm();
+
+    // Navigate to hunts page
+    navigate("/");
   };
 
-  // Reset form function
   const resetForm = () => {
     setHuntName("");
     setDescription("");
     setStartDate("");
     setDuration("");
+    setParticipantCount("0");
+    setReward("");
+    setDifficulty("Beginner");
+    setCategory("General");
     setClues([]);
     setCurrentClue({
       id: 1,
@@ -224,34 +162,24 @@ export function Create() {
       lat: 0,
       long: 0,
     });
-    setCluesCID("");
-    setAnswersCID("");
-    setUploadedCIDs(null);
   };
 
-  const transactionArgs = getTransactionArgs();
-  const canCreateHunt = transactionArgs !== null && account;
+  const canCreateHunt =
+    huntName &&
+    description &&
+    startDate &&
+    duration &&
+    reward &&
+    clues.length > 0;
 
   return (
     <div className="container mx-auto px-4 py-8">
       <h1 className="text-3xl font-bold mb-8">Create New Hunt</h1>
 
-      {/* Simple Backend Health Check */}
-      <div className="mb-6 p-4 bg-gray-50 rounded-md">
-        <div className="flex items-center gap-4">
-          <Button onClick={testBackendHealth} variant="outline" size="sm">
-            Test Backend
-          </Button>
-          {healthCheckStatus && (
-            <span className="text-sm">{healthCheckStatus}</span>
-          )}
-        </div>
-      </div>
-
       <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
         <div className="space-y-6">
           <div>
-            <Label htmlFor="huntName">Hunt Name</Label>
+            <Label htmlFor="huntName">Hunt Name *</Label>
             <Input
               id="huntName"
               value={huntName}
@@ -261,7 +189,7 @@ export function Create() {
           </div>
 
           <div>
-            <Label htmlFor="description">Description</Label>
+            <Label htmlFor="description">Description *</Label>
             <Textarea
               id="description"
               value={description}
@@ -271,7 +199,7 @@ export function Create() {
           </div>
 
           <div>
-            <Label htmlFor="startDate">Start Date</Label>
+            <Label htmlFor="startDate">Start Date *</Label>
             <Input
               id="startDate"
               type="date"
@@ -281,7 +209,7 @@ export function Create() {
           </div>
 
           <div>
-            <Label htmlFor="duration">Duration (hours)</Label>
+            <Label htmlFor="duration">Duration (hours) *</Label>
             <Input
               id="duration"
               type="number"
@@ -291,73 +219,79 @@ export function Create() {
             />
           </div>
 
-          <div className="border-t pt-6">
-            <h3 className="text-lg font-semibold mb-4">IPFS Configuration</h3>
-
-            <div className="space-y-4">
-              <div>
-                <Label htmlFor="cluesCID">Clues CID</Label>
-                <Input
-                  id="cluesCID"
-                  value={cluesCID}
-                  onChange={(e) => setCluesCID(e.target.value)}
-                  placeholder="Enter clues CID"
-                />
-              </div>
-
-              <div>
-                <Label htmlFor="answersCID">Answers CID</Label>
-                <Input
-                  id="answersCID"
-                  value={answersCID}
-                  onChange={(e) => setAnswersCID(e.target.value)}
-                  placeholder="Enter answers CID"
-                />
-              </div>
-            </div>
+          <div>
+            <Label htmlFor="participantCount">Expected Participants</Label>
+            <Input
+              id="participantCount"
+              type="number"
+              value={participantCount}
+              onChange={(e) => setParticipantCount(e.target.value)}
+              placeholder="Expected number of participants"
+            />
           </div>
 
-          {canCreateHunt ? (
-            <TransactionButton
-              contractAddress={contractAddress}
-              abi={huntABI}
-              functionName="createHunt"
-              args={transactionArgs}
-              text="Create Hunt"
-              className="w-full bg-yellow/40 border border-black text-black hover:bg-orange/90 py-2 rounded-md font-medium"
-              onSuccess={handleTransactionSuccess}
-              onError={handleTransactionError}
+          <div>
+            <Label htmlFor="reward">Reward *</Label>
+            <Input
+              id="reward"
+              value={reward}
+              onChange={(e) => setReward(e.target.value)}
+              placeholder="e.g., 1000 $GNU INU, NFT + Tokens"
             />
-          ) : (
-            <Button
-              disabled
-              className="w-full bg-gray-300 text-gray-500 py-2 rounded-md font-medium"
+          </div>
+
+          <div>
+            <Label htmlFor="difficulty">Difficulty</Label>
+            <select
+              id="difficulty"
+              value={difficulty}
+              onChange={(e) => setDifficulty(e.target.value)}
+              className="w-full p-2 border border-gray-300 rounded-md"
             >
-              {!account
-                ? "Connect Wallet to Create Hunt"
-                : "Fill in all fields to create hunt"}
-            </Button>
-          )}
+              <option value="Beginner">Beginner</option>
+              <option value="Intermediate">Intermediate</option>
+              <option value="Advanced">Advanced</option>
+            </select>
+          </div>
+
+          <div>
+            <Label htmlFor="category">Category</Label>
+            <select
+              id="category"
+              value={category}
+              onChange={(e) => setCategory(e.target.value)}
+              className="w-full p-2 border border-gray-300 rounded-md"
+            >
+              <option value="General">General</option>
+              <option value="Ecosystem">Ecosystem</option>
+              <option value="DeFi">DeFi</option>
+              <option value="NFT">NFT</option>
+              <option value="Development">Development</option>
+              <option value="Community">Community</option>
+            </select>
+          </div>
+
+          <Button
+            onClick={handleCreateHunt}
+            disabled={!canCreateHunt}
+            className={`w-full py-2 rounded-md font-medium ${
+              canCreateHunt
+                ? "bg-yellow/40 border border-black text-black hover:bg-orange/90"
+                : "bg-gray-300 text-gray-500"
+            }`}
+          >
+            {canCreateHunt
+              ? "Create Hunt"
+              : "Fill in required fields and add clues"}
+          </Button>
         </div>
 
         <div className="space-y-6">
           <div className="p-4 border rounded-lg space-y-4">
-            <div className="flex justify-between items-center">
-              <h2 className="text-xl font-semibold">Add Clue</h2>
-              {clues.length > 0 && (
-                <Button
-                  onClick={uploadToIPFS}
-                  disabled={isUploading}
-                  variant="outline"
-                  className="bg-green-50"
-                >
-                  {isUploading ? "Uploading..." : "Upload Clues to IPFS"}
-                </Button>
-              )}
-            </div>
+            <h2 className="text-xl font-semibold">Add Clue</h2>
 
             <div>
-              <Label htmlFor="clueDescription">Clue Description</Label>
+              <Label htmlFor="clueDescription">Clue Description *</Label>
               <Textarea
                 id="clueDescription"
                 value={currentClue.description}
@@ -372,7 +306,7 @@ export function Create() {
             </div>
 
             <div>
-              <Label htmlFor="clueAnswer">Clue Answer</Label>
+              <Label htmlFor="clueAnswer">Clue Answer *</Label>
               <Input
                 id="clueAnswer"
                 value={currentClue.answer}
@@ -388,7 +322,7 @@ export function Create() {
 
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <Label htmlFor="latitude">Latitude</Label>
+                <Label htmlFor="latitude">Latitude *</Label>
                 <Input
                   id="latitude"
                   type="number"
@@ -397,14 +331,14 @@ export function Create() {
                   onChange={(e) =>
                     setCurrentClue((prev) => ({
                       ...prev,
-                      lat: parseFloat(e.target.value),
+                      lat: parseFloat(e.target.value) || 0,
                     }))
                   }
                   placeholder="Enter latitude"
                 />
               </div>
               <div>
-                <Label htmlFor="longitude">Longitude</Label>
+                <Label htmlFor="longitude">Longitude *</Label>
                 <Input
                   id="longitude"
                   type="number"
@@ -413,7 +347,7 @@ export function Create() {
                   onChange={(e) =>
                     setCurrentClue((prev) => ({
                       ...prev,
-                      long: parseFloat(e.target.value),
+                      long: parseFloat(e.target.value) || 0,
                     }))
                   }
                   placeholder="Enter longitude"
@@ -431,7 +365,7 @@ export function Create() {
           </div>
 
           <div className="space-y-2">
-            <h3 className="font-semibold">Added Clues:</h3>
+            <h3 className="font-semibold">Added Clues: ({clues.length})</h3>
             {clues.map((clue) => (
               <div key={clue.id} className="p-3 bg-gray-100 rounded-md">
                 <p className="font-medium">Clue {clue.id}</p>
@@ -442,22 +376,10 @@ export function Create() {
                 <p className="text-xs text-gray-500">Answer: {clue.answer}</p>
               </div>
             ))}
-            {uploadedCIDs && (
-              <div className="mt-4 p-3 bg-green-50 rounded-md">
-                <p className="text-sm font-medium text-green-800">
-                  IPFS Upload Complete
-                </p>
-                <p className="text-xs text-green-600">
-                  Clues CID: {uploadedCIDs.clues_blobId}
-                </p>
-                <p className="text-xs text-green-600">
-                  Answers CID: {uploadedCIDs.answers_blobId}
-                </p>
-                <p className="text-xs text-amber-600 mt-2">
-                  Please copy these CIDs to the respective fields in the IPFS
-                  Configuration section
-                </p>
-              </div>
+            {clues.length === 0 && (
+              <p className="text-gray-500 text-sm">
+                No clues added yet. Add at least one clue to create the hunt.
+              </p>
             )}
           </div>
         </div>

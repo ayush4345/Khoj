@@ -16,14 +16,16 @@ import { toast } from "sonner";
 const MOCK_CLUES = [
   {
     id: 1,
-    riddle: "Find the heart of the city where dreams come alive. Look for the place where people gather to celebrate the future of finance and technology. **Hint: It's a famous landmark in your city's downtown area.**",
-    location: "Downtown City Center"
+    riddle:
+      "Find the heart of the city where dreams come alive. Look for the place where people gather to celebrate the future of finance and technology. **Hint: It's a famous landmark in your city's downtown area.**",
+    location: "Downtown City Center",
   },
   {
     id: 2,
-    riddle: "Seek the digital oasis where innovation meets community. Find the space where developers and creators build the next generation of web3 applications. **Hint: Look for a modern tech hub or innovation center.**",
-    location: "Tech Innovation Hub"
-  }
+    riddle:
+      "Seek the digital oasis where innovation meets community. Find the space where developers and creators build the next generation of web3 applications. **Hint: Look for a modern tech hub or innovation center.**",
+    location: "Tech Innovation Hub",
+  },
 ];
 
 export function Clue() {
@@ -39,9 +41,44 @@ export function Clue() {
     "idle" | "verifying" | "success" | "error"
   >("idle");
   const [_, setShowSuccessMessage] = useState(false);
+  const [clueData, setClueData] = useState<any[]>([]);
 
   const currentClue = parseInt(clueId || "0");
-  const currentClueData = MOCK_CLUES;
+
+  // Load clues for this hunt (custom or mock)
+  useEffect(() => {
+    const loadClueData = () => {
+      // Try to load custom hunt clues first
+      const customClues = localStorage.getItem(`hunt_clues_${huntId}`);
+      if (customClues) {
+        try {
+          const parsedClues = JSON.parse(customClues);
+          // Transform custom clues to match expected format
+          const transformedClues = parsedClues.map((clue: any) => ({
+            id: clue.id,
+            riddle: clue.description,
+            location: `Lat: ${clue.lat}, Long: ${clue.long}`,
+            answer: clue.answer,
+            lat: clue.lat,
+            long: clue.long,
+          }));
+          setClueData(transformedClues);
+          console.log("Loaded custom clues for hunt", huntId, transformedClues);
+        } catch (error) {
+          console.error("Error parsing custom clues:", error);
+          setClueData(MOCK_CLUES);
+        }
+      } else {
+        // Fall back to mock clues
+        setClueData(MOCK_CLUES);
+        console.log("Using mock clues for hunt", huntId);
+      }
+    };
+
+    if (huntId) {
+      loadClueData();
+    }
+  }, [huntId]);
 
   // Get hunt data from localStorage (stored when hunt was started)
   const getHuntData = () => {
@@ -54,16 +91,17 @@ export function Clue() {
         difficulty: parsedData.difficulty,
         category: parsedData.category,
         reward: parsedData.reward,
-        totalClues: currentClueData?.length || 0,
+        totalClues: clueData?.length || 0,
         currentClue: parseInt(clueId || "1"),
       };
     }
-    
+
     // Fallback to default data if no stored data found
     return {
       title: "GNU INU Treasure Hunt",
-      description: "Discover the vibrant GNU INU ecosystem through interactive challenges!",
-      totalClues: currentClueData?.length || 0,
+      description:
+        "Discover the vibrant GNU INU ecosystem through interactive challenges!",
+      totalClues: clueData?.length || 0,
       currentClue: parseInt(clueId || "1"),
     };
   };
@@ -72,6 +110,9 @@ export function Clue() {
 
   useEffect(() => {
     setVerificationState("idle");
+
+    // Wait for clue data to be loaded before doing validation
+    if (clueData.length === 0) return;
 
     // Progress validation: prevent skipping ahead
     const progressKey = `hunt_progress_${huntId}`;
@@ -96,7 +137,7 @@ export function Clue() {
         }
       );
     }
-  }, [clueId, huntId, navigate]);
+  }, [clueId, huntId, navigate, clueData]);
 
   const handleVerify = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -112,7 +153,7 @@ export function Clue() {
       // Simulate API call delay for better UX
       await new Promise((resolve) => setTimeout(resolve, 1500));
 
-      // Frontend-only: Always return true for location verification
+      // Frontend-only prototype: Always pass verification for all hunts
       const isCorrect = true;
 
       if (isCorrect) {
@@ -132,16 +173,21 @@ export function Clue() {
         // Wait 2 seconds before navigating
         setTimeout(() => {
           const nextClueId = currentClue + 1;
-          if (currentClueData && nextClueId <= currentClueData.length) {
+          if (clueData && nextClueId <= clueData.length) {
             navigate(`/hunt/${huntId}/clue/${nextClueId}`);
           } else {
             // User has completed all clues - mark hunt as completed
             if (huntId) {
-              const huntCompletions = JSON.parse(localStorage.getItem('hunt_completions') || '{}');
+              const huntCompletions = JSON.parse(
+                localStorage.getItem("hunt_completions") || "{}"
+              );
               huntCompletions[huntId] = true;
-              localStorage.setItem('hunt_completions', JSON.stringify(huntCompletions));
+              localStorage.setItem(
+                "hunt_completions",
+                JSON.stringify(huntCompletions)
+              );
             }
-            
+
             toast.success("Congratulations! You've completed the hunt!");
             navigate(`/hunt/${huntId}/end`);
           }
@@ -149,7 +195,7 @@ export function Clue() {
       } else {
         setVerificationState("error");
         setAttempts((prev) => prev - 1);
-        toast.error("Location not correct. Try again!");
+        toast.error("Verification failed. Try again!");
       }
     } catch (error) {
       console.error("Verification failed:", error);
@@ -232,7 +278,7 @@ export function Clue() {
                 Back to Hunts
               </Button>
               <div className="text-2xl font-bold">
-                # {currentClue}/{currentClueData?.length}
+                # {currentClue}/{clueData?.length}
               </div>
             </div>
 
@@ -242,7 +288,7 @@ export function Clue() {
           <div className="prose max-w-none p-6 h-full">
             <h1 className="text-xl font-semibold mb-2">Clue</h1>
             <ReactMarkdown className="text-lg">
-              {currentClueData?.[currentClue - 1]?.riddle}
+              {clueData?.[currentClue - 1]?.riddle}
             </ReactMarkdown>
           </div>
 

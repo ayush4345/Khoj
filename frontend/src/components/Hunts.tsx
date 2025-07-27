@@ -98,6 +98,7 @@ interface Hunt {
   reward: string;
   difficulty: string;
   category: string;
+  clues?: any[]; // Added for custom hunts
 }
 
 export function Hunts() {
@@ -117,6 +118,56 @@ export function Hunts() {
   );
   // Track if initial load is complete to prevent premature saving
   const [isInitialLoadComplete, setIsInitialLoadComplete] = useState(false);
+  // Track custom hunts from localStorage
+  const [customHunts, setCustomHunts] = useState<Hunt[]>([]);
+
+  // Load custom hunts from localStorage
+  useEffect(() => {
+    const loadCustomHunts = () => {
+      try {
+        const savedHunts = localStorage.getItem("custom_hunts");
+        if (savedHunts) {
+          const parsedHunts = JSON.parse(savedHunts);
+          setCustomHunts(parsedHunts);
+          console.log("Loaded custom hunts from localStorage:", parsedHunts);
+        }
+      } catch (error) {
+        console.error("Error loading custom hunts:", error);
+      }
+    };
+
+    loadCustomHunts();
+
+    // Add event listener to reload hunts when window gains focus
+    const handleFocus = () => {
+      loadCustomHunts();
+    };
+
+    window.addEventListener("focus", handleFocus);
+
+    // Also listen for storage events from other tabs
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === "custom_hunts") {
+        loadCustomHunts();
+      }
+    };
+
+    window.addEventListener("storage", handleStorageChange);
+
+    // Listen for custom huntsUpdated event
+    const handleHuntsUpdated = () => {
+      loadCustomHunts();
+    };
+
+    window.addEventListener("huntsUpdated", handleHuntsUpdated);
+
+    // Cleanup
+    return () => {
+      window.removeEventListener("focus", handleFocus);
+      window.removeEventListener("storage", handleStorageChange);
+      window.removeEventListener("huntsUpdated", handleHuntsUpdated);
+    };
+  }, []);
 
   // Load registration and completion states from localStorage on component mount
   useEffect(() => {
@@ -146,9 +197,12 @@ export function Hunts() {
           );
         }
 
+        // Get all hunts (custom + mock) for auto-detection
+        const allHunts = [...customHunts, ...MOCK_HUNTS];
+
         // Auto-detect registrations and completions based on hunt progress
         // If a user has any progress on a hunt, consider them registered
-        MOCK_HUNTS.forEach((hunt) => {
+        allHunts.forEach((hunt) => {
           const progressKey = `hunt_progress_${hunt.id}`;
           const progress = JSON.parse(
             localStorage.getItem(progressKey) || "[]"
@@ -187,8 +241,15 @@ export function Hunts() {
       }
     };
 
-    loadPersistedStates();
-  }, []);
+    // Only run this after custom hunts are loaded
+    if (
+      customHunts.length > 0 ||
+      localStorage.getItem("custom_hunts") === null ||
+      localStorage.getItem("custom_hunts") === "[]"
+    ) {
+      loadPersistedStates();
+    }
+  }, [customHunts]);
 
   // Save registration state to localStorage whenever it changes (but only after initial load)
   useEffect(() => {
@@ -209,33 +270,14 @@ export function Hunts() {
     }
   }, [huntCompletions, isInitialLoadComplete]);
 
-  // Feature flag for hunt filtering - controlled by environment variable
-  const enableHuntFiltering =
-    import.meta.env.VITE_ENABLE_HUNT_FILTERING === "true";
-
-  // Process hunts based on feature flag
+  // Process hunts based on feature flag and merge custom hunts with mock hunts
   const processedHunts = useMemo(() => {
-    if (!enableHuntFiltering) {
-      return MOCK_HUNTS;
-    }
+    // Combine custom hunts (at the top) with mock hunts
+    let allHunts = [...customHunts, ...MOCK_HUNTS];
 
-    // Filter out hunts with 'Test' or 'hello' in name or description (case insensitive)
-    // Also filter out hunts with descriptions smaller than 5 characters
-    const filteredHunts = MOCK_HUNTS.filter((hunt: Hunt) => {
-      const nameMatch =
-        hunt.name.toLowerCase().includes("test") ||
-        hunt.name.toLowerCase().includes("hello");
-      const descriptionMatch =
-        hunt.description.toLowerCase().includes("test") ||
-        hunt.description.toLowerCase().includes("hello");
-      const descriptionTooShort = hunt.description.length < 5;
-
-      return !nameMatch && !descriptionMatch && !descriptionTooShort;
-    });
-
-    // Return only the last 5 hunts
-    return filteredHunts.slice(-5);
-  }, [enableHuntFiltering]);
+    // Remove all filtering - just return all hunts
+    return allHunts;
+  }, [customHunts]);
 
   function formatDate(date: string) {
     const year = date.substring(0, 4);
@@ -345,6 +387,19 @@ export function Hunts() {
             reward: currentHunt.reward,
           })
         );
+
+        // For custom hunts, store the clues data if it exists
+        const isCustomHunt = customHunts.some((ch) => ch.id === huntId);
+        if (isCustomHunt) {
+          const customHunt = customHunts.find((ch) => ch.id === huntId);
+          if (customHunt && customHunt.clues) {
+            // Store clues in the format expected by the Clue component
+            localStorage.setItem(
+              `hunt_clues_${huntId}`,
+              JSON.stringify(customHunt.clues)
+            );
+          }
+        }
       }
 
       // Navigate to the hunt page
@@ -384,6 +439,19 @@ export function Hunts() {
       <h1 className="text-3xl font-bold my-8 text-green drop-shadow-xl">
         Hunts
       </h1>
+
+      {customHunts.length > 0 && (
+        <div className="mb-6">
+          <div className="flex items-center gap-2 mb-4">
+            <h2 className="text-xl font-semibold text-gray-800">
+              Your Custom Hunts
+            </h2>
+            <span className="bg-blue-100 text-blue-800 text-xs font-medium px-2.5 py-0.5 rounded-full">
+              {customHunts.length} custom
+            </span>
+          </div>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
         {processedHunts.map((hunt: Hunt, index: number) => {
