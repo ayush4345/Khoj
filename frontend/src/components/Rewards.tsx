@@ -56,52 +56,52 @@ interface RewardCard {
 
 const rewardCards: RewardCard[] = [
   {
-    code: "GUI1000",
-    description: "Earn 1000 $GUI INU tokens for completing your first hunt!",
+    code: "FIRSTHUNT",
+    description: "Earned 1500 $GUI INU for completing your first treasure hunt at Golden Gate Park!",
     isExpired: false,
-    icon: <MdToken className="w-5 h-5 text-white" />,
+    icon: <MdRocketLaunch className="w-5 h-5 text-white" />,
   },
   {
-    code: "BUILDER",
-    description: "Get exclusive access to Aptos builder community events",
-    isExpired: false,
-    icon: <MdBuild className="w-5 h-5 text-white" />,
-  },
-  {
-    code: "MEME100",
-    description: "100 $GUI INU tokens for creating viral memes about Aptos",
+    code: "SPEEDRUN",
+    description: "500 $GUI INU bonus for completing 'Downtown Mystery' hunt in under 30 minutes",
     isExpired: false,
     icon: <BsLightningCharge className="w-5 h-5 text-white" />,
   },
   {
-    code: "COMMUNITY",
-    description: "Join exclusive $GUI INU community channels and groups",
+    code: "MEMENMFT",
+    description: "Claim exclusive 'Lost Treasure Meme' NFT + 300 $GUI INU tokens",
     isExpired: false,
-    icon: <MdGroups className="w-5 h-5 text-white" />,
+    icon: <MdStar className="w-5 h-5 text-white" />,
   },
   {
-    code: "STARTER",
-    description: "500 $GUI INU tokens for new Aptos ecosystem builders",
+    code: "EXPLORER",
+    description: "750 $GUI INU for discovering 5 hidden locations in the 'Urban Adventure' hunt",
+    isExpired: false,
+    icon: <MdToken className="w-5 h-5 text-white" />,
+  },
+  {
+    code: "CREATOR",
+    description: "Earned 2000 $GUI INU for creating the popular 'Sunset Clues' treasure hunt",
     isExpired: true,
     expiryDate: "15 Dec",
-    icon: <MdRocketLaunch className="w-5 h-5 text-white" />,
+    icon: <MdBuild className="w-5 h-5 text-white" />,
   },
   {
-    code: "TRENDING",
-    description: "Earn rewards for trending $GUI INU content on social media",
+    code: "NIGHTOWL",
+    description: "1000 $GUI INU bonus for completing 'Midnight Mystery' hunt series",
     isExpired: true,
     expiryDate: "20 Dec",
     icon: <MdTrendingUp className="w-5 h-5 text-white" />,
   },
   {
-    code: "VIP",
-    description: "VIP access to $GUI INU ecosystem events and airdrops",
+    code: "SOCIALSHARE",
+    description: "200 $GUI INU for sharing your treasure hunt victory on social media",
     isExpired: false,
-    icon: <MdStar className="w-5 h-5 text-white" />,
+    icon: <MdGroups className="w-5 h-5 text-white" />,
   },
   {
-    code: "HODL",
-    description: "Bonus rewards for long-term $GUI INU token holders",
+    code: "LEGENDARY",
+    description: "5000 $GUI INU jackpot for finding the legendary 'Golden Clue' location",
     isExpired: false,
     icon: <BsCoin className="w-5 h-5 text-white" />,
   },
@@ -181,7 +181,7 @@ export function Rewards() {
             </CardFooter>
           </Card>
         </div>
-        <h2 className="text-3xl font-bold my-8 text-green">$GUI INU Rewards</h2>
+        <h2 className="text-3xl font-bold my-8 text-green">Rewards</h2>
         <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
           {rewardCards.map((card, index) => (
             <div

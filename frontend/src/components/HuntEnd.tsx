@@ -4,46 +4,37 @@ import { BsArrowLeft, BsTrophy } from "react-icons/bs";
 import { FaCoins, FaRegClock, FaCheckCircle } from "react-icons/fa";
 import { Confetti } from "./ui/confetti";
 import { useEffect, useState } from "react";
-import { useReadContract } from "thirdweb/react";
-import { getContract } from "thirdweb";
-import { huntABI } from "../assets/hunt_abi";
-import { CONTRACT_ADDRESSES } from "../lib/utils";
-import { toast } from "sonner";
-import { client } from "../lib/client";
-import { paseoAssetHub } from "../lib/chains";
-
-// Type guard to ensure address is a valid hex string
-function isValidHexAddress(address: string): address is `0x${string}` {
-  return /^0x[0-9a-fA-F]{40}$/.test(address);
-}
 
 export function HuntEnd() {
   const { huntId } = useParams();
   const navigate = useNavigate();
   const [progress, setProgress] = useState(0);
 
-  // Get current network and contract address
-  const currentNetwork = localStorage.getItem("current_network") || "assetHub";
-  const contractAddress =
-    CONTRACT_ADDRESSES[currentNetwork as keyof typeof CONTRACT_ADDRESSES] ??
-    "0x0000000000000000000000000000000000000000";
+  // Get hunt data from localStorage (stored when hunt was started)
+  const getHuntData = () => {
+    const storedData = localStorage.getItem(`hunt_data_${huntId}`);
+    if (storedData) {
+      const parsedData = JSON.parse(storedData);
+      return {
+        title: parsedData.title,
+        description: parsedData.description,
+        difficulty: parsedData.difficulty,
+        category: parsedData.category,
+        reward: parsedData.reward,
+      };
+    }
 
-  // Create thirdweb contract instance
-  const contract = getContract({
-    client,
-    chain: paseoAssetHub,
-    address: contractAddress as `0x${string}`,
-    abi: huntABI,
-  });
+    // Fallback to default data if no stored data found
+    return {
+      title: "GNU INU Treasure Hunt",
+      description:
+        "You've successfully completed all the challenges and found the treasure!",
+      reward: "1000 $GNU INU + Exclusive NFT",
+    };
+  };
 
-  // Get hunt details from contract
-  const { data: huntDetails } = useReadContract({
-    contract,
-    method: "getHunt",
-    params: [BigInt(huntId || 0)],
-  });
-
-  const trustScore = localStorage.getItem("trust_score") || "6.5";
+  const huntData = getHuntData();
+  const trustScore = localStorage.getItem("trust_score") || "9";
   const score = parseInt(trustScore);
 
   useEffect(() => {
@@ -54,23 +45,13 @@ export function HuntEnd() {
     return () => clearTimeout(timer);
   }, [score]);
 
-  if (!isValidHexAddress(contractAddress)) {
-    toast.error("Invalid contract address format");
-    return null;
-  }
-
-  // Use dynamic title, static reward/description
-  const huntData = {
-    title: huntDetails ? huntDetails[0] : "...",
-    totalReward: "Swags!! 🎁",
-    description:
-      "You've successfully completed all the challenges and found the treasure!",
-  };
-
   const handleClaim = async () => {
-    // Add claim logic here
-    console.log(huntId);
-    console.log("Claiming reward...");
+    // Frontend-only claim logic
+    console.log("Claiming reward for hunt:", huntId);
+    console.log("Reward:", huntData.reward);
+
+    // Navigate to the Rewards page
+    navigate("/profile");
   };
 
   return (
@@ -89,7 +70,7 @@ export function HuntEnd() {
                 Back to Hunts
               </Button>
             </div>
-            <h1 className="text-4xl font-bold mb-2">{huntData.title}</h1>
+            <h1 className="text-3xl font-bold mb-2">{huntData.title}</h1>
           </div>
 
           {/* Success Content */}
@@ -176,7 +157,8 @@ export function HuntEnd() {
               Treasure Found!
             </h2>
             <p className="text-md text-gray-600 mb-8 text-center max-w-2xl">
-              {huntData.description}
+              You've successfully completed all the challenges and found the
+              treasure!
             </p>
 
             {/* Reward Display */}
@@ -185,7 +167,7 @@ export function HuntEnd() {
               <div>
                 <p className="text-sm text-gray-600">Your Reward</p>
                 <p className="text-2xl font-bold text-green">
-                  {huntData.totalReward}
+                  {huntData.reward}
                 </p>
               </div>
             </div>

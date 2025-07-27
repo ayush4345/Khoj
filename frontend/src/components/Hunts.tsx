@@ -5,11 +5,12 @@ import {
   FaCalendarAlt,
   FaUsers,
   FaCoins,
+  FaCheckCircle,
 } from "react-icons/fa";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { Button } from "./ui/button.tsx";
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 
 // Hardcoded hunt data for frontend-only prototype
 const MOCK_HUNTS = [
@@ -106,10 +107,107 @@ export function Hunts() {
   const [huntRegistrations, setHuntRegistrations] = useState<
     Record<number, boolean>
   >({});
+  // Track completion status per hunt
+  const [huntCompletions, setHuntCompletions] = useState<
+    Record<number, boolean>
+  >({});
   // Track which hunt is currently starting
   const [startingHunts, setStartingHunts] = useState<Record<number, boolean>>(
     {}
   );
+  // Track if initial load is complete to prevent premature saving
+  const [isInitialLoadComplete, setIsInitialLoadComplete] = useState(false);
+
+  // Load registration and completion states from localStorage on component mount
+  useEffect(() => {
+    const loadPersistedStates = () => {
+      try {
+        // Load registration states
+        const savedRegistrations = localStorage.getItem("hunt_registrations");
+        let parsedRegistrations: Record<number, boolean> = {};
+        if (savedRegistrations) {
+          parsedRegistrations = JSON.parse(savedRegistrations);
+          setHuntRegistrations(parsedRegistrations);
+          console.log(
+            "Loaded registrations from localStorage:",
+            parsedRegistrations
+          );
+        }
+
+        // Load completion states
+        const savedCompletions = localStorage.getItem("hunt_completions");
+        let parsedCompletions: Record<number, boolean> = {};
+        if (savedCompletions) {
+          parsedCompletions = JSON.parse(savedCompletions);
+          setHuntCompletions(parsedCompletions);
+          console.log(
+            "Loaded completions from localStorage:",
+            parsedCompletions
+          );
+        }
+
+        // Auto-detect registrations and completions based on hunt progress
+        // If a user has any progress on a hunt, consider them registered
+        MOCK_HUNTS.forEach((hunt) => {
+          const progressKey = `hunt_progress_${hunt.id}`;
+          const progress = JSON.parse(
+            localStorage.getItem(progressKey) || "[]"
+          );
+          const huntDataKey = `hunt_data_${hunt.id}`;
+          const huntData = localStorage.getItem(huntDataKey);
+
+          // If user has progress or hunt data, they should be considered registered
+          if (
+            (progress.length > 0 || huntData) &&
+            !parsedRegistrations[hunt.id]
+          ) {
+            console.log(
+              `Auto-registering hunt ${hunt.id} based on existing progress`
+            );
+            setHuntRegistrations((prev) => ({
+              ...prev,
+              [hunt.id]: true,
+            }));
+          }
+
+          // Check if hunt is completed (assuming 2 clues per hunt based on MOCK_CLUES in Clue.tsx)
+          if (progress.length >= 2 && !parsedCompletions[hunt.id]) {
+            console.log(`Auto-completing hunt ${hunt.id} based on progress`);
+            setHuntCompletions((prev) => ({
+              ...prev,
+              [hunt.id]: true,
+            }));
+          }
+        });
+
+        setIsInitialLoadComplete(true);
+      } catch (error) {
+        console.error("Error loading persisted hunt states:", error);
+        setIsInitialLoadComplete(true);
+      }
+    };
+
+    loadPersistedStates();
+  }, []);
+
+  // Save registration state to localStorage whenever it changes (but only after initial load)
+  useEffect(() => {
+    if (isInitialLoadComplete && Object.keys(huntRegistrations).length > 0) {
+      console.log("Saving registrations to localStorage:", huntRegistrations);
+      localStorage.setItem(
+        "hunt_registrations",
+        JSON.stringify(huntRegistrations)
+      );
+    }
+  }, [huntRegistrations, isInitialLoadComplete]);
+
+  // Save completion state to localStorage whenever it changes (but only after initial load)
+  useEffect(() => {
+    if (isInitialLoadComplete && Object.keys(huntCompletions).length > 0) {
+      console.log("Saving completions to localStorage:", huntCompletions);
+      localStorage.setItem("hunt_completions", JSON.stringify(huntCompletions));
+    }
+  }, [huntCompletions, isInitialLoadComplete]);
 
   // Feature flag for hunt filtering - controlled by environment variable
   const enableHuntFiltering =
@@ -170,8 +268,21 @@ export function Hunts() {
   const getButtonConfig = (hunt: Hunt, index: number) => {
     const huntStartTime = hunt.startTime;
     const isHuntStarted = huntStartTime <= today;
-    const isRegistered = huntRegistrations[index];
+    const isRegistered = huntRegistrations[hunt.id];
+    const isCompleted = huntCompletions[hunt.id];
     const isStarting = startingHunts[index];
+
+    // Check if hunt is completed
+    if (isCompleted) {
+      return {
+        text: "Completed",
+        disabled: true,
+        className:
+          "bg-green/90 border border-green text-white font-semibold cursor-default",
+        action: null,
+        icon: <FaCheckCircle className="w-4 h-4 mr-2" />,
+      };
+    }
 
     if (!isHuntStarted) {
       return {
@@ -180,6 +291,7 @@ export function Hunts() {
         className:
           "bg-gray-400 cursor-not-allowed text-gray-600 border border-gray-300",
         action: null,
+        icon: null,
       };
     }
 
@@ -190,6 +302,7 @@ export function Hunts() {
         className:
           "bg-yellow/70 border border-black text-white font-semibold hover:bg-yellow-600 hover:border-yellow-700 shadow-md hover:shadow-lg transform hover:scale-[1.02]",
         action: "register",
+        icon: null,
       };
     }
 
@@ -200,6 +313,7 @@ export function Hunts() {
         ? "bg-gray-500 border border-gray-600 text-white font-semibold cursor-not-allowed"
         : "bg-green/70 border border-green text-white font-semibold hover:bg-green hover:border-green shadow-md hover:shadow-lg transform hover:scale-[1.02]",
       action: "start",
+      icon: null,
     };
   };
 
@@ -218,6 +332,21 @@ export function Hunts() {
 
       console.log("Starting hunt:", huntId, clues_blobId, answers_blobId);
 
+      // Store hunt data in localStorage for access in Clue component
+      const currentHunt = processedHunts.find((hunt) => hunt.id === huntId);
+      if (currentHunt) {
+        localStorage.setItem(
+          `hunt_data_${huntId}`,
+          JSON.stringify({
+            title: currentHunt.name,
+            description: currentHunt.description,
+            difficulty: currentHunt.difficulty,
+            category: currentHunt.category,
+            reward: currentHunt.reward,
+          })
+        );
+      }
+
       // Navigate to the hunt page
       navigate(`/hunt/${huntId}/clue/1`);
     } catch (error) {
@@ -229,23 +358,24 @@ export function Hunts() {
     }
   };
 
-  const handleRegisterSuccess = (huntIndex: number) => {
-    console.log("Register success for hunt:", huntIndex);
+  const handleRegisterSuccess = (huntId: number) => {
+    console.log("Register success for hunt:", huntId);
     toast.success("Successfully registered for hunt!");
 
-    // Update registration status for this specific hunt
+    // Update registration status for this specific hunt using hunt ID
     setHuntRegistrations((prev) => ({
       ...prev,
-      [huntIndex]: true,
+      [huntId]: true,
     }));
   };
 
-  const handleRegister = (huntIndex: number) => {
+  const handleRegister = (huntId: number) => {
     // Simulate registration process
-    toast.loading("Registering for hunt...");
+    const loadingToast = toast.loading("Registering for hunt...");
 
     setTimeout(() => {
-      handleRegisterSuccess(huntIndex);
+      toast.dismiss(loadingToast);
+      handleRegisterSuccess(huntId);
     }, 1500);
   };
 
@@ -328,10 +458,11 @@ export function Hunts() {
                 {/* Single button that changes based on state */}
                 {buttonConfig.action === "register" ? (
                   <Button
-                    onClick={() => handleRegister(index)}
+                    onClick={() => handleRegister(hunt.id)}
                     className={`w-full py-1.5 text-sm font-medium rounded-md ${buttonConfig.className} transition-colors duration-300`}
                     disabled={buttonConfig.disabled}
                   >
+                    {buttonConfig.icon}
                     {buttonConfig.text}
                   </Button>
                 ) : (
@@ -346,9 +477,10 @@ export function Hunts() {
                         );
                       }
                     }}
-                    className={`w-full py-1.5 text-sm font-medium rounded-md ${buttonConfig.className} transition-colors duration-300`}
+                    className={`w-full py-1.5 text-sm font-medium rounded-md ${buttonConfig.className} transition-colors duration-300 flex items-center justify-center`}
                     disabled={buttonConfig.disabled}
                   >
+                    {buttonConfig.icon}
                     {buttonConfig.text}
                   </Button>
                 )}

@@ -10,24 +10,21 @@ import {
   BsXCircle,
   BsArrowRepeat,
 } from "react-icons/bs";
-import { config, getTrueNetworkInstance } from "../../true-network/true.config";
-import { huntAttestationSchema } from "@/schemas/huntSchema";
-import { runAlgo } from "@truenetworkio/sdk/dist/pallets/algorithms/extrinsic";
-import { HuddleRoom } from "./HuddleRoom";
-import { useReadContract, useActiveAccount } from "thirdweb/react";
-import { getContract } from "thirdweb";
-import { huntABI } from "../assets/hunt_abi";
-import { CONTRACT_ADDRESSES } from "../lib/utils";
 import { toast } from "sonner";
-import { client } from "../lib/client";
-import { paseoAssetHub } from "../lib/chains";
 
-const BACKEND_URL = import.meta.env.VITE_PUBLIC_BACKEND_URL;
-
-// Type guard to ensure address is a valid hex string
-function isValidHexAddress(address: string): address is `0x${string}` {
-  return /^0x[0-9a-fA-F]{40}$/.test(address);
-}
+// Mock clue data for frontend-only prototype
+const MOCK_CLUES = [
+  {
+    id: 1,
+    riddle: "Find the heart of the city where dreams come alive. Look for the place where people gather to celebrate the future of finance and technology. **Hint: It's a famous landmark in your city's downtown area.**",
+    location: "Downtown City Center"
+  },
+  {
+    id: 2,
+    riddle: "Seek the digital oasis where innovation meets community. Find the space where developers and creators build the next generation of web3 applications. **Hint: Look for a modern tech hub or innovation center.**",
+    location: "Tech Innovation Hub"
+  }
+];
 
 export function Clue() {
   const { huntId, clueId } = useParams();
@@ -41,31 +38,37 @@ export function Clue() {
   const [verificationState, setVerificationState] = useState<
     "idle" | "verifying" | "success" | "error"
   >("idle");
-  const [showSuccessMessage, setShowSuccessMessage] = useState(false);
+  const [_, setShowSuccessMessage] = useState(false);
 
-  // Add this to get current network from localStorage
-  const currentNetwork = localStorage.getItem("current_network") || "assetHub";
-  const contractAddress =
-    CONTRACT_ADDRESSES[currentNetwork as keyof typeof CONTRACT_ADDRESSES] ??
-    "0x0000000000000000000000000000000000000000";
+  const currentClue = parseInt(clueId || "0");
+  const currentClueData = MOCK_CLUES;
 
-  // Create thirdweb contract instance
-  const contract = getContract({
-    client,
-    chain: paseoAssetHub,
-    address: contractAddress as `0x${string}`,
-    abi: huntABI,
-  });
+  // Get hunt data from localStorage (stored when hunt was started)
+  const getHuntData = () => {
+    const storedData = localStorage.getItem(`hunt_data_${huntId}`);
+    if (storedData) {
+      const parsedData = JSON.parse(storedData);
+      return {
+        title: parsedData.title,
+        description: parsedData.description,
+        difficulty: parsedData.difficulty,
+        category: parsedData.category,
+        reward: parsedData.reward,
+        totalClues: currentClueData?.length || 0,
+        currentClue: parseInt(clueId || "1"),
+      };
+    }
+    
+    // Fallback to default data if no stored data found
+    return {
+      title: "GNU INU Treasure Hunt",
+      description: "Discover the vibrant GNU INU ecosystem through interactive challenges!",
+      totalClues: currentClueData?.length || 0,
+      currentClue: parseInt(clueId || "1"),
+    };
+  };
 
-  // Get hunt details from contract
-  const { data: huntDetails } = useReadContract({
-    contract,
-    method: "getHunt",
-    params: [BigInt(huntId || 0)],
-  });
-
-  const account = useActiveAccount();
-  const userWallet = account?.address;
+  const huntData = getHuntData();
 
   useEffect(() => {
     setVerificationState("idle");
@@ -84,130 +87,35 @@ export function Clue() {
       navigator.geolocation.getCurrentPosition(
         ({ coords }) => {
           const { latitude, longitude } = coords;
-          console.log(latitude, longitude);
+          console.log("Location detected:", latitude, longitude);
           setLocation({ latitude, longitude });
         },
         (error) => {
           console.error("Geolocation error:", error);
+          toast.error("Please enable location access to continue");
         }
       );
     }
   }, [clueId, huntId, navigate]);
 
-  if (!isValidHexAddress(contractAddress)) {
-    toast.error("Invalid contract address format");
-    return null;
-  }
-
-  const currentClue = parseInt(clueId || "0");
-  const currentClueData = JSON.parse(
-    localStorage.getItem(`hunt_riddles_${huntId}`) || "[]"
-  );
-
-  // Extract hunt details
-  const huntData = huntDetails
-    ? {
-        title: huntDetails[0],
-        description: huntDetails[1],
-        totalClues: currentClueData?.length || 0,
-        currentClue: parseInt(clueId || "1"),
-        answers_blobId: huntDetails[7],
-      }
-    : null;
-
-  const createHuntAttestation = async () => {
-    try {
-      const api = await getTrueNetworkInstance();
-      if (!userWallet) {
-        toast.error("Wallet not connected");
-        setIsSubmitting(false);
-        return;
-      }
-      const output = await huntAttestationSchema.attest(api, userWallet, {
-        huntId: parseInt(huntId || "0"),
-        timestamp: Math.floor(Date.now() / 1000), // Current timestamp in seconds
-        clueNumber: parseInt(clueId || "0"),
-        numberOfTries: attempts,
-      });
-      console.log("Attestation created:", output);
-      await api.network.disconnect();
-    } catch (error) {
-      setIsSubmitting(false);
-      console.error("Failed to create attestation:", error);
-    }
-  };
-
-  const getUserScore = async () => {
-    const api = await getTrueNetworkInstance();
-    if (!userWallet) {
-      throw new Error("Wallet not connected");
-    }
-    const score = await runAlgo(
-      api.network,
-      config.issuer.hash,
-      api.account,
-      userWallet,
-      config.algorithm?.id ?? 0
-    );
-    return score;
-  };
-
   const handleVerify = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!location || !huntData) return;
+    if (!location) {
+      toast.error("Please allow location access to continue");
+      return;
+    }
 
     setIsSubmitting(true);
     setVerificationState("verifying");
-    console.log("huntData: ", huntDetails);
-    console.log("=== DEBUGGING REQUEST ===");
-    console.log("Current location state:", location);
-    console.log("Location type:", typeof location);
-    console.log("Location keys:", Object.keys(location));
-    console.log("huntData:", huntData);
-    console.log("huntData.answers_blobId:", huntData.answers_blobId);
-    console.log("clueId param:", clueId);
-    console.log("Number(clueId):", Number(clueId));
 
     try {
-      const headersList = {
-        Accept: "*/*",
-        "Content-Type": "application/json",
-      };
+      // Simulate API call delay for better UX
+      await new Promise((resolve) => setTimeout(resolve, 1500));
 
-      const requestBody = {
-        userAddress: "0x7F23F30796F54a44a7A95d8f8c8Be1dB017C3397",
-        answers_blobId: huntData.answers_blobId,
-        cLat: location.latitude,
-        cLong: location.longitude,
-        clueId: Number(clueId),
-      };
+      // Frontend-only: Always return true for location verification
+      const isCorrect = true;
 
-      console.log("Request body object:", requestBody);
-      console.log("Request body object keys:", Object.keys(requestBody));
-
-      const bodyContent = JSON.stringify(requestBody);
-      console.log("Stringified body content:", bodyContent);
-
-      const response = await fetch(`${BACKEND_URL}/decrypt-ans`, {
-        method: "POST",
-        body: bodyContent,
-        headers: headersList,
-      });
-
-      console.log("Response status:", response.status);
-      console.log("Response headers:", response.headers);
-
-      const data = await response.json();
-      console.log("=== BACKEND RESPONSE ===");
-      console.log("Full response data:", data);
-      console.log("Response data type:", typeof data);
-      console.log("Response data keys:", Object.keys(data));
-      console.log("data.isClose:", data.isClose);
-      console.log("data.isClose type:", typeof data.isClose);
-
-      const isCorrect = data.isClose;
-
-      if (isCorrect == "true") {
+      if (isCorrect) {
         // Update progress in localStorage
         const progressKey = `hunt_progress_${huntId}`;
         let progress = JSON.parse(localStorage.getItem(progressKey) || "[]");
@@ -215,37 +123,38 @@ export function Clue() {
           progress.push(currentClue);
           localStorage.setItem(progressKey, JSON.stringify(progress));
         }
-        // Create attestation when clue is solved
-        await createHuntAttestation();
 
         setVerificationState("success");
         setShowSuccessMessage(true);
 
-        console.log("Success"), showSuccessMessage;
+        toast.success("Location verified! Moving to next clue...");
 
         // Wait 2 seconds before navigating
-        setTimeout(async () => {
+        setTimeout(() => {
           const nextClueId = currentClue + 1;
           if (currentClueData && nextClueId <= currentClueData.length) {
             navigate(`/hunt/${huntId}/clue/${nextClueId}`);
           } else {
-            // He has completed all clues
-            try {
-              const score = await getUserScore();
-              localStorage.setItem("trust_score", score.toString());
-            } catch (error) {
-              console.error("Failed to get user score:", error);
+            // User has completed all clues - mark hunt as completed
+            if (huntId) {
+              const huntCompletions = JSON.parse(localStorage.getItem('hunt_completions') || '{}');
+              huntCompletions[huntId] = true;
+              localStorage.setItem('hunt_completions', JSON.stringify(huntCompletions));
             }
+            
+            toast.success("Congratulations! You've completed the hunt!");
             navigate(`/hunt/${huntId}/end`);
           }
         }, 2000);
       } else {
         setVerificationState("error");
         setAttempts((prev) => prev - 1);
+        toast.error("Location not correct. Try again!");
       }
     } catch (error) {
       console.error("Verification failed:", error);
       setVerificationState("error");
+      toast.error("Verification failed. Please try again.");
     } finally {
       setIsSubmitting(false);
     }
@@ -338,7 +247,7 @@ export function Clue() {
           </div>
 
           <div className="mt-8 border-t pt-6 p-6 flex flex-col">
-            <div className="flex items-center justify-between mb-4">
+            <div className="flex flex-col space-y-2 mb-4">
               <div className="flex items-center text-gray-600">
                 <BsGeoAlt className="mr-2" />
                 {location ? "Location detected" : "Detecting location..."}
@@ -376,8 +285,6 @@ export function Clue() {
             </form>
           </div>
         </div>
-
-        {huntId && <HuddleRoom huntId={huntId} />}
       </div>
     </div>
   );
