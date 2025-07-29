@@ -236,7 +236,7 @@ export function Create() {
               id="reward"
               value={reward}
               onChange={(e) => setReward(e.target.value)}
-              placeholder="e.g., 1000 $GNU INU, NFT + Tokens"
+              placeholder="e.g., 1000 $GUI INU, NFT + Tokens"
             />
           </div>
 

@@ -26,10 +26,10 @@ export function HuntEnd() {
 
     // Fallback to default data if no stored data found
     return {
-      title: "GNU INU Treasure Hunt",
+      title: "GUI INU Treasure Hunt",
       description:
         "You've successfully completed all the challenges and found the treasure!",
-      reward: "1000 $GNU INU + Exclusive NFT",
+      reward: "1000 $GUI INU + Exclusive NFT",
     };
   };
 

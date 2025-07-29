@@ -104,9 +104,9 @@ export function Clue() {
 
     // Fallback to default data if no stored data found
     return {
-      title: "GNU INU Treasure Hunt",
+      title: "GUI INU Treasure Hunt",
       description:
-        "Discover the vibrant GNU INU ecosystem through interactive challenges!",
+        "Discover the vibrant GUI INU ecosystem through interactive challenges!",
       totalClues: clueData?.length || 0,
       currentClue: parseInt(clueId || "1"),
     };
