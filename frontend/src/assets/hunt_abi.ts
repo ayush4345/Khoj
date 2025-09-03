@@ -453,6 +453,11 @@ export const huntABI = [
         name: "_huntId",
         type: "uint256",
       },
+      {
+        internalType: "address",
+        name: "user_address",
+        type: "address",
+      },
     ],
     name: "getTeam",
     outputs: [
